@@ -10,17 +10,20 @@ defmodule Apiproxy.Upstream do
   end
 
   def init([protocol, host, port]) do
-    socket = Socket.TCP.connect! host, port, [:binary, packet: :line]
-    {:ok, %State{host: host, port: port, socket: socket}}
+    {:ok, socket} = :gen_tcp.connect(String.to_char_list(host), port, [:binary, packet: 0, active: false, reuseaddr: true, nodelay: true])
+    {:ok, %State{host: host, port: port, socket: socket, protocol: protocol}}
   end
 
   def handle_call({:send, data}, _from, state) do
-    :ok = Socket.Stream.send!(state.socket, data)
+    :ok = :gen_tcp.send(state.socket, data)
     {:reply, :ok, %{state | socket: state.socket}}
   end
 
   def handle_call(:recv, _from, state) do
-    {:reply, Socket.Stream.recv!(state.socket, 0), state}
+    case :gen_tcp.recv(state.socket, 0, 10) do
+      {:ok, data} -> {:reply, {:data, data}, state}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
   end
 
   def handle_cast(_msg, state) do
